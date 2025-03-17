@@ -1,0 +1,33 @@
+{
+    "name": "voicechathelper",
+    "version": "1.0.0",
+    "description": "Library for facilitating cross platform real time voice chat.",
+    "keywords": ["networking", "library", "ape apps", "voip"],
+    "homepage": "https://www.ape-apps.com",
+    "bugs": {
+        "email": "support@ape-apps.com"
+    },
+    "author": {
+        "name": "Ape Apps",
+        "email": "support@ape-apps.com",
+        "url": "https://www.ape-apps.com"
+    },
+    "funding": {
+        "type": "patreon",
+        "url": "https://www.patreon.com/apeapps"
+    },
+    "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/bastecklein/voicechathelper"
+    },
+    "main": "voicechathelper.js",
+    "config": {},
+    "dependencies": {
+        "common-helpers": "git+ssh://git@github.com:bastecklein/common-helpers.git#main",
+        "socket.io-client": "*"
+    },
+    "devDependencies": {},
+    "private": false,
+    "type": "module"
+}
