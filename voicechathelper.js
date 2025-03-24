@@ -30,12 +30,19 @@ let hasTalked = false;
 
 let isTalking = false;
 
-export function createChannel() {
+export function createChannel(server) {
     if(!didLoad) {
         onLoad();
     }
 
-    const channel = new VoiceChannel(null);
+    if(!server) {
+        console.error("VoiceChannel requires a signaling server to be set.");
+        return null;
+    }
+
+    const channel = new VoiceChannel({
+        signalingServer: server
+    });
 
     channels[channel.id] = channel;
 
@@ -44,13 +51,19 @@ export function createChannel() {
     return channel;
 }
 
-export function joinChannel(channel) {
+export function joinChannel(channel, server) {
     if(!didLoad) {
         onLoad();
     }
 
+    if(!server) {
+        console.error("VoiceChannel requires a signaling server to be set.");
+        return null;
+    }
+
     const ch = new VoiceChannel({
-        channel: channel
+        channel: channel,
+        signalingServer: server
     });
 
     channels[ch.id] = ch;
