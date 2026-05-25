@@ -24,10 +24,15 @@
     "main": "voicechathelper.js",
     "config": {},
     "dependencies": {
-        "common-helpers": "git+ssh://git@github.com:bastecklein/common-helpers.git#main",
+        "common-helpers": "https://github.com/bastecklein/common-helpers",
         "socket.io-client": "*"
     },
-    "devDependencies": {},
+    "devDependencies": {
+        "@eslint/js": "*",
+        "@eslint/json": "*",
+        "eslint": "*",
+        "globals": "*"
+    },
     "private": false,
     "type": "module"
 }

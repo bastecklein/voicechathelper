@@ -30,7 +30,7 @@ let hasTalked = false;
 
 let isTalking = false;
 
-export function createChannel(server) {
+export function createChannel(server, options = {}) {
     if(!didLoad) {
         onLoad();
     }
@@ -41,7 +41,9 @@ export function createChannel(server) {
     }
 
     const channel = new VoiceChannel({
-        signalingServer: server
+        signalingServer: server,
+        socketOptions: options.socketOptions || null,
+        username: options.username || null
     });
 
     channels[channel.id] = channel;
@@ -51,7 +53,7 @@ export function createChannel(server) {
     return channel;
 }
 
-export function joinChannel(channel, server) {
+export function joinChannel(channel, server, options = {}) {
     if(!didLoad) {
         onLoad();
     }
@@ -63,7 +65,9 @@ export function joinChannel(channel, server) {
 
     const ch = new VoiceChannel({
         channel: channel,
-        signalingServer: server
+        signalingServer: server,
+        socketOptions: options.socketOptions || null,
+        username: options.username || null
     });
 
     channels[ch.id] = ch;
@@ -79,6 +83,7 @@ class VoiceChannel {
         this.signalChannel = options.channel || "aa-vch-" + this.id;
         this.username = options.username || clientUid;
         this.signalingServer = options.signalingServer || null;
+        this.socketOptions = options.socketOptions || null;
 
         this.voicePingInterval = null;
         this.signalSocket = null;
@@ -136,6 +141,11 @@ class VoiceChannel {
     }
 
     shutdownChannel() {
+        if(this.voicePingInterval) {
+            clearInterval(this.voicePingInterval);
+            this.voicePingInterval = null;
+        }
+
         if(this.signalSocket) {
 
             this.signalSocket.emit("gamemessage",{
@@ -147,7 +157,10 @@ class VoiceChannel {
                 }
             });
 
-            this.signalSocket.emit("closeconnection");
+            this.signalSocket.off("connect");
+            this.signalSocket.off("disconnect");
+            this.signalSocket.off("message");
+            this.signalSocket.disconnect();
         }
 
         this.signalSocket = null;
@@ -176,7 +189,24 @@ class VoiceChannel {
         });
     }
 
-    setVolume() {}
+    setVolume(volume = 1.0) {
+        const parsed = Number(volume);
+
+        if(Number.isNaN(parsed)) {
+            return;
+        }
+
+        const clamped = Math.max(0, Math.min(1, parsed));
+        this.volume = clamped;
+
+        for(let id in this.allPeers) {
+            const peer = this.allPeers[id];
+
+            if(peer && peer.remoteAudio) {
+                peer.remoteAudio.volume = clamped;
+            }
+        }
+    }
 }
 
 class VoiceChatPeer {
@@ -213,10 +243,19 @@ function setUpVoiceChannel(channel) {
         return;
     }
 
-    channel.signalSocket = io(channel.signalingServer, {
-        secure: true,
-        rejectUnauthorized: false
-    });
+    const socketOptions = {
+        secure: true
+    };
+
+    if(channel.socketOptions && typeof channel.socketOptions == "object") {
+        Object.assign(socketOptions, channel.socketOptions);
+    }
+
+    if(typeof socketOptions.rejectUnauthorized == "undefined") {
+        socketOptions.rejectUnauthorized = true;
+    }
+
+    channel.signalSocket = io(channel.signalingServer, socketOptions);
 
     channel.signalSocket.on("connect",function() {
         onSignalServerConnect(channel);
@@ -233,10 +272,17 @@ function setUpVoiceChannel(channel) {
 
 async function gooseUpMicStream() {
     if(!sharedMicStream) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: false
-        });
+        let stream;
+
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: false
+            });
+        } catch(ex) {
+            console.error("Unable to access microphone.", ex);
+            return null;
+        }
 
         if(stream) {
             sharedMicStream = stream;
@@ -255,6 +301,8 @@ async function gooseUpMicStream() {
             }
         }
     }
+
+    return sharedMicStream;
 }
 
 function announceActive(channel) {
@@ -400,6 +448,10 @@ function onSignalServerMessage(channel,message) {
 }
 
 function monitorInput() {
+
+    if(!analyser) {
+        return;
+    }
 
     if (analyser && !analyser.getFloatTimeDomainData) {
         const r = new Uint8Array(2048);
@@ -599,7 +651,7 @@ function initClient(channel, remoteClient, username, myPeerId) {
         const state = client.outgoingStreamConnection.connectionState;
 
         if(state == "disconnected" || state == "closed" || state == "failed") {
-            closeOutPeer(client, channel = null);
+            closeOutPeer(client, channel);
         }
         
     };
@@ -635,7 +687,7 @@ async function handleRTCOffer(channel, forClient, forPeer, offer) {
         const state = peer.incomingStreamConnection.connectionState;
 
         if(state == "disconnected" || state == "closed" || state == "failed") {
-            closeOutPeer(peer, channel = null);
+            closeOutPeer(peer, channel);
         }
     };
     
@@ -677,7 +729,7 @@ async function handleRTCOffer(channel, forClient, forPeer, offer) {
                     },1500);
                 };
                 peer.remoteAudio.autoplay = true;
-                peer.volume = channel.volume;
+                peer.remoteAudio.volume = channel.volume;
             }
 
             peer.remoteAudio.srcObject = e.streams[0];
@@ -714,6 +766,10 @@ async function handlPeerIce(channel, forClient, forPeer, ice) {
     const peer = getVoicePeer(channel, forPeer, null);
 
     if(!peer) {
+        return;
+    }
+
+    if(!peer.incomingStreamConnection) {
         return;
     }
 
@@ -756,6 +812,10 @@ function handleClientIce(channel, remoteClient, myClient, ice) {
     const peer = getVoicePeer(channel, remoteClient, null);
 
     if(!peer) {
+        return;
+    }
+
+    if(!peer.outgoingStreamConnection) {
         return;
     }
 
